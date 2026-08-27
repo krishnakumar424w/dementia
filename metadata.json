@@ -1,0 +1,10 @@
+{
+  "name": "dementia",
+  "description": "Imported from GitHub: krishnakumar424w/dementia",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

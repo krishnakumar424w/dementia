@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #F8FAFC;
+  --ink: #0F172A;
+  --border: #CBD5E1;
+  --accent: #2563EB;
+  --success: #059669;
+  --warning: #D97706;
+  --f-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --f-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* High Readability Typography Scale */
+h1 {
+  font-size: 1.875rem; /* 30px */
+  line-height: 2.25rem;
+  font-weight: 800;
+}
+
+h2 {
+  font-size: 1.5rem; /* 24px */
+  line-height: 2rem;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.25rem; /* 20px */
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+
+p, span, label, input, button, select, textarea {
+  font-size: 1rem; /* 16px base minimum */
+}
+
+.text-micro {
+  font-size: 0.875rem; /* 14px */
+}
+
+/* High Density Components & Utilities with Enhanced Font Sizes */
+.font-mono-tech {
+  font-family: var(--f-mono);
+}
+
+.hd-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hd-card-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #F1F5F9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hd-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+}
+
+.hd-stat-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #64748B;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.hd-stat-value {
+  font-family: var(--f-mono);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.hd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hd-badge-blue {
+  background: #DBEAFE;
+  color: #1E40AF;
+  border: 1px solid #BFDBFE;
+}
+
+.hd-badge-emerald {
+  background: #DCFCE7;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+}
+
+.hd-badge-amber {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
+.hd-badge-rose {
+  background: #FFE4E6;
+  color: #9F1239;
+  border: 1px solid #FECDD3;
+}
+
+.hd-ai-box {
+  padding: 14px 18px;
+  background: #F0F9FF;
+  border: 1px solid #BAE6FD;
+  border-radius: 8px;
+}
+
+.hd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.hd-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  color: #475569;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hd-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+/* Custom Hide Scrollbar Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

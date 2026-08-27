@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameModule, GameCompletionResult } from '../games/GameRegistry';
 import { PatientProfile, CaretakerInteractionResponse } from '../types';
 import { api } from '../services/api';
-import { sounds } from '../services/audio';
+import { sounds, speechManager } from '../services/audio';
 import { progressionService } from '../services/progression';
 import { 
   Sparkles, Volume2, ArrowRight, Brain, Trophy, 
@@ -16,6 +16,8 @@ interface AIFeedbackViewProps {
   gameModule: GameModule;
   completionResult: GameCompletionResult;
   patient: PatientProfile;
+  initialFeedback?: CaretakerInteractionResponse;
+  taskKey?: string;
   onProceedToMilestones: () => void;
   onReturnToDashboard: () => void;
   onReplayGame?: () => void;
@@ -25,14 +27,21 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
   gameModule,
   completionResult,
   patient,
+  initialFeedback,
+  taskKey,
   onProceedToMilestones,
   onReturnToDashboard,
   onReplayGame,
 }) => {
-  const [caretakerFeedback, setCaretakerFeedback] = useState<CaretakerInteractionResponse | null>(null);
-  const [loadingAI, setLoadingAI] = useState<boolean>(true);
+  const [caretakerFeedback, setCaretakerFeedback] = useState<CaretakerInteractionResponse | null>(
+    initialFeedback || null
+  );
+  const [loadingAI, setLoadingAI] = useState<boolean>(!initialFeedback);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [domainScoreDelta, setDomainScoreDelta] = useState<number>(3.5);
+
+  const evaluatedTaskKey = taskKey || `drill_${gameModule.gameId}_${completionResult.score}_${completionResult.completionTimeSeconds}`;
+  const processedKeyRef = useRef<string>('');
 
   const currentDifficulty = patient.currentDifficulty?.[gameModule.gameId] || 3;
   const accuracyPercent = Math.round((completionResult?.accuracy || 1) * 100);
@@ -41,7 +50,13 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
   const activeLevel = progState.levels[progState.currentLevelIdx] || progState.levels[0];
 
   useEffect(() => {
-    // Fire celebration confetti upon landing on feedback screen
+    // Only process once per distinct game task completion
+    if (processedKeyRef.current === evaluatedTaskKey) {
+      return;
+    }
+    processedKeyRef.current = evaluatedTaskKey;
+
+    // Fire celebration confetti once upon landing on feedback screen
     try {
       sounds.playFanfare();
       confetti({
@@ -52,6 +67,21 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
       });
     } catch {
       // ignore
+    }
+
+    if (initialFeedback) {
+      setCaretakerFeedback(initialFeedback);
+      setLoadingAI(false);
+      // AI speaks only once; if it already spoke on game complete, speakOnce will gracefully skip
+      if (initialFeedback.message) {
+        speechManager.speakOnce(
+          evaluatedTaskKey,
+          initialFeedback.message,
+          () => setIsSpeaking(true),
+          () => setIsSpeaking(false)
+        );
+      }
+      return;
     }
 
     const fetchAIFeedback = async () => {
@@ -72,18 +102,18 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
 
         setCaretakerFeedback(aiReaction);
         
-        // Auto-play voice synthesis feedback if available
-        if (typeof window !== 'undefined' && window.speechSynthesis && aiReaction.message) {
-          const utterance = new SpeechSynthesisUtterance(aiReaction.message);
-          utterance.rate = 0.92;
-          utterance.onstart = () => setIsSpeaking(true);
-          utterance.onend = () => setIsSpeaking(false);
-          window.speechSynthesis.speak(utterance);
+        // Auto-play voice synthesis feedback exactly once if not yet spoken
+        if (aiReaction?.message) {
+          speechManager.speakOnce(
+            evaluatedTaskKey,
+            aiReaction.message,
+            () => setIsSpeaking(true),
+            () => setIsSpeaking(false)
+          );
         }
       } catch (err) {
         console.error('Failed to get AI Caretaker feedback:', err);
-        // Fallback robust AI feedback
-        setCaretakerFeedback({
+        const fallbackFeedback: CaretakerInteractionResponse = {
           message: `Splendid effort on the ${gameModule.title}, Arthur! Your visual pattern recall was exceptionally steady today with ${accuracyPercent}% accuracy. Let's inspect your milestone progression next.`,
           observation: 'Stable neurocognitive retention observed. High psychomotor consistency and zero fatigue markers.',
           recommendedAction: 'Proceed to milestone badge overview and review consecutive streak achievements.',
@@ -91,7 +121,8 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
           difficulty: currentDifficulty + (accuracyPercent > 85 ? 1 : 0),
           priority: 'normal',
           encouragementTip: 'Consistent daily repetitions strengthen synaptic pathways and memory endurance.',
-        });
+        };
+        setCaretakerFeedback(fallbackFeedback);
       } finally {
         setLoadingAI(false);
       }
@@ -100,20 +131,16 @@ export const AIFeedbackView: React.FC<AIFeedbackViewProps> = ({
     fetchAIFeedback();
 
     return () => {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      speechManager.cancel();
     };
-  }, [gameModule, completionResult, patient]);
+  }, [evaluatedTaskKey, gameModule.gameId, gameModule.title, completionResult.accuracy, completionResult.completionTimeSeconds, completionResult.score, completionResult.mistakes, patient.id, initialFeedback]);
 
   const speakFeedback = (text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.92;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    speechManager.speak(
+      text,
+      () => setIsSpeaking(true),
+      () => setIsSpeaking(false)
+    );
   };
 
   return (

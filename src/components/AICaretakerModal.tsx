@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PatientProfile, CaretakerInteractionResponse, CognitiveCategory } from '../types';
 import { api } from '../services/api';
-import { sounds } from '../services/audio';
+import { sounds, speechManager } from '../services/audio';
 import { 
   Sparkles, Send, Mic, MicOff, Volume2, VolumeX, 
   X, Brain, Bot, RefreshCw, Zap,
@@ -73,6 +73,13 @@ export const AICaretakerModal: React.FC<AICaretakerModalProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // Clean up speech when modal is closed/unmounted
+  useEffect(() => {
+    return () => {
+      speechManager.cancel();
+    };
+  }, []);
 
   // Text-to-Speech: Plays Gemini high-fidelity TTS audio if available, or Web Speech API fallback
   const playOrSpeak = async (text: string, audioBase64?: string) => {

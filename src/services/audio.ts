@@ -342,4 +342,67 @@ class SoundService {
   }
 }
 
+class SpeechService {
+  private spokenKeys = new Set<string>();
+
+  public cancel() {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  /**
+   * Speaks the text ONCE for a given unique task or event key.
+   * If already spoken for this key, returns false and does not speak.
+   */
+  public speakOnce(key: string, text: string, onStart?: () => void, onEnd?: () => void): boolean {
+    if (this.spokenKeys.has(key)) {
+      return false;
+    }
+    this.spokenKeys.add(key);
+    this.speak(text, onStart, onEnd);
+    return true;
+  }
+
+  public hasSpoken(key: string): boolean {
+    return this.spokenKeys.has(key);
+  }
+
+  public markAsSpoken(key: string) {
+    this.spokenKeys.add(key);
+  }
+
+  public speak(text: string, onStart?: () => void, onEnd?: () => void) {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !text?.trim()) return;
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text.trim());
+    utterance.rate = 0.92;
+    utterance.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const friendlyVoice = voices.find(v =>
+      v.lang.startsWith('en') && (
+        v.name.includes('Samantha') ||
+        v.name.includes('Natural') ||
+        v.name.includes('Google') ||
+        v.name.includes('Karen') ||
+        v.name.includes('Victoria')
+      )
+    );
+    if (friendlyVoice) utterance.voice = friendlyVoice;
+
+    if (onStart) utterance.onstart = onStart;
+    utterance.onend = () => {
+      if (onEnd) onEnd();
+    };
+    utterance.onerror = () => {
+      if (onEnd) onEnd();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
 export const sounds = new SoundService();
+export const speechManager = new SpeechService();

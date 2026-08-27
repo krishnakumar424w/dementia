@@ -36,6 +36,80 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+// In-memory TTS Cache & Rate-limit backoff tracker
+const ttsCache = new Map<string, { audioBase64: string; mimeType: string }>();
+let ttsCooldownUntil = 0;
+let textModelCooldownUntil = 0;
+
+/**
+ * Resilient Gemini TTS synthesizer with LRU cache and rate-limit backoff.
+ */
+async function synthesizeGeminiTTS(text: string, voice: string = 'Kore'): Promise<{ audioBase64?: string; mimeType?: string } | null> {
+  const cleanText = text.trim();
+  if (!cleanText) return null;
+
+  const cacheKey = `${voice}:::${cleanText}`;
+  if (ttsCache.has(cacheKey)) {
+    return ttsCache.get(cacheKey)!;
+  }
+
+  // If in rate-limit cooldown (e.g. after a 429 quota exhaustion), skip calling remote API
+  if (Date.now() < ttsCooldownUntil) {
+    return null;
+  }
+
+  const ai = getGeminiClient();
+  if (!ai || !process.env.GEMINI_API_KEY) {
+    return null;
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-tts-preview',
+      contents: [{ parts: [{ text: `Say warmly and reassuringly: ${cleanText}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice || 'Kore' },
+          },
+        },
+      },
+    });
+
+    const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (audioData) {
+      const result = {
+        audioBase64: audioData,
+        mimeType: 'audio/pcm;rate=24000',
+      };
+      if (ttsCache.size > 50) {
+        const firstKey = ttsCache.keys().next().value;
+        if (firstKey) ttsCache.delete(firstKey);
+      }
+      ttsCache.set(cacheKey, result);
+      return result;
+    }
+  } catch (err: any) {
+    const isQuotaExceeded =
+      err?.status === 429 ||
+      err?.code === 429 ||
+      err?.status === 'RESOURCE_EXHAUSTED' ||
+      (typeof err?.message === 'string' && (
+        err.message.includes('429') ||
+        err.message.includes('Quota exceeded') ||
+        err.message.includes('RESOURCE_EXHAUSTED')
+      ));
+
+    if (isQuotaExceeded) {
+      // Cooldown for 60 seconds so subsequent requests fall back smoothly without quota spam
+      ttsCooldownUntil = Date.now() + 60000;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Resilient Gemini text generation helper with exponential backoff & model fallback.
  * Mitigates temporary 503 "high demand" or 429 rate limit spikes before falling back to rule engine.
@@ -49,6 +123,10 @@ async function generateGeminiContentWithRetry(options: {
 }): Promise<string | null> {
   const ai = getGeminiClient();
   if (!ai) return null;
+
+  if (Date.now() < textModelCooldownUntil) {
+    return null;
+  }
 
   const candidateModels = options.models || ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
   const maxRetries = options.maxRetries ?? 2;
@@ -79,8 +157,15 @@ async function generateGeminiContentWithRetry(options: {
           (typeof err?.message === 'string' && (
             err.message.includes('high demand') ||
             err.message.includes('Spikes in demand') ||
-            err.message.includes('503')
+            err.message.includes('503') ||
+            err.message.includes('429') ||
+            err.message.includes('Quota exceeded') ||
+            err.message.includes('RESOURCE_EXHAUSTED')
           ));
+
+        if (status === 429 || status === 'RESOURCE_EXHAUSTED' || (typeof err?.message === 'string' && err.message.includes('Quota exceeded'))) {
+          textModelCooldownUntil = Date.now() + 30000;
+        }
 
         if (isUnavailableOrRateLimited && attempt < maxRetries) {
           const delayMs = attempt * 300 + Math.random() * 150;
@@ -1753,72 +1838,32 @@ Return JSON strictly matching this schema:
 
   // Optional: Try generating server-side Gemini TTS audio if requested
   if (generateAudio && process.env.GEMINI_API_KEY) {
-    try {
-      const ai = getGeminiClient();
-      if (ai) {
-        const ttsResponse = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-tts-preview',
-          contents: [{ parts: [{ text: `Say warmly and reassuringly: ${parsedResponse.message}` }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Kore' },
-              },
-            },
-          },
-        });
-        const audioData = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (audioData) {
-          parsedResponse.audioBase64 = audioData;
-        }
-      }
-    } catch (ttsErr) {
-      console.warn('Gemini TTS inline audio skipped:', ttsErr);
+    const ttsResult = await synthesizeGeminiTTS(parsedResponse.message, 'Kore');
+    if (ttsResult?.audioBase64) {
+      parsedResponse.audioBase64 = ttsResult.audioBase64;
     }
   }
 
   res.json(parsedResponse);
 });
 
-// Dedicated Text-to-Speech API Endpoint using Gemini 3.1 Flash TTS
+// Dedicated Text-to-Speech API Endpoint using Gemini 3.1 Flash TTS with seamless client fallback
 app.post('/api/tts', async (req, res) => {
   const { text, voice = 'Kore' } = req.body;
   if (!text) {
     return res.status(400).json({ error: 'Text is required for TTS' });
   }
 
-  const ai = getGeminiClient();
-  if (!ai || !process.env.GEMINI_API_KEY) {
-    return res.status(503).json({ error: 'Gemini TTS unavailable (API key not configured)' });
+  const ttsResult = await synthesizeGeminiTTS(text, voice);
+  if (ttsResult?.audioBase64) {
+    return res.json(ttsResult);
   }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-tts-preview',
-      contents: [{ parts: [{ text: `Say with gentle, warm geriatric cadence: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice || 'Kore' },
-          },
-        },
-      },
-    });
-
-    const audioBase64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (audioBase64) {
-      return res.json({
-        audioBase64,
-        mimeType: 'audio/pcm;rate=24000',
-      });
-    }
-    res.status(500).json({ error: 'Failed to generate audio content' });
-  } catch (err: any) {
-    console.warn('Gemini TTS error:', err?.message || err);
-    res.status(500).json({ error: err?.message || 'TTS generation error' });
-  }
+  // Graceful fallback for client Web Speech synthesis without 500 error
+  res.json({
+    fallbackToClient: true,
+    message: 'Web Speech API fallback active',
+  });
 });
 
 // AI Caretaker Clinical Summary

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { GameModule, GameCompletionResult } from '../games/GameRegistry';
 import { PatientProfile, CaretakerInteractionResponse } from '../types';
 import { api } from '../services/api';
-import { sounds } from '../services/audio';
+import { sounds, speechManager } from '../services/audio';
 import { progressionService } from '../services/progression';
 import { 
   Trophy, ArrowRight, Volume2, Sparkles, 
@@ -17,7 +17,12 @@ interface GameContainerProps {
   onClose: () => void;
   onGameCompleted: (updatedPatient: PatientProfile) => void;
   onLaunchNextGame: (gameId: string) => void;
-  onOpenAIFeedback?: (gameModule: GameModule, result: GameCompletionResult) => void;
+  onOpenAIFeedback?: (
+    gameModule: GameModule,
+    result: GameCompletionResult,
+    initialFeedback?: CaretakerInteractionResponse,
+    taskKey?: string
+  ) => void;
 }
 
 export const GameContainer: React.FC<GameContainerProps> = ({
@@ -34,17 +39,29 @@ export const GameContainer: React.FC<GameContainerProps> = ({
   const [completionResult, setCompletionResult] = useState<GameCompletionResult | null>(null);
   const [submissionFeedback, setSubmissionFeedback] = useState<any>(null);
   const [caretakerFeedback, setCaretakerFeedback] = useState<CaretakerInteractionResponse | null>(null);
+  const [currentTaskKey, setCurrentTaskKey] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [progressionInfo, setProgressionInfo] = useState<{
     starsAwarded: number;
     unlockedNext: boolean;
     levelTitle: string;
     levelNumber: number;
+    nextLevelNumber?: number;
   } | null>(null);
+
+  // Stop speech if modal closes or unmounts
+  useEffect(() => {
+    return () => {
+      speechManager.cancel();
+    };
+  }, []);
 
   const GameComponent = gameModule.component;
 
   const handleGameFinished = async (result: GameCompletionResult) => {
+    const taskKey = `drill_${gameModule.gameId}_${result.score}_${result.completionTimeSeconds}_${Date.now()}`;
+    setCurrentTaskKey(taskKey);
     setCompletionResult(result);
     setGameState('completed');
     setIsSubmitting(true);
@@ -62,6 +79,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
         unlockedNext: evalRes.unlockedNext,
         levelTitle: evalRes.levelPlayed.title,
         levelNumber: evalRes.levelPlayed.levelNumber,
+        nextLevelNumber: evalRes.advancedToIdx + 1,
       });
     } catch (e) {
       console.warn('Progression evaluation error:', e);
@@ -110,10 +128,14 @@ export const GameContainer: React.FC<GameContainerProps> = ({
 
       setCaretakerFeedback(aiReaction);
 
-      if (typeof window !== 'undefined' && window.speechSynthesis && aiReaction.message) {
-        const utterance = new SpeechSynthesisUtterance(aiReaction.message);
-        utterance.rate = 0.92;
-        window.speechSynthesis.speak(utterance);
+      // AI speaks exactly ONCE upon task completion
+      if (aiReaction?.message) {
+        speechManager.speakOnce(
+          taskKey,
+          aiReaction.message,
+          () => setIsSpeaking(true),
+          () => setIsSpeaking(false)
+        );
       }
     } catch (err) {
       console.error('Error submitting game result:', err);
@@ -123,11 +145,11 @@ export const GameContainer: React.FC<GameContainerProps> = ({
   };
 
   const speakFeedback = (text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.92;
-    window.speechSynthesis.speak(utterance);
+    speechManager.speak(
+      text,
+      () => setIsSpeaking(true),
+      () => setIsSpeaking(false)
+    );
   };
 
   return (
@@ -305,7 +327,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({
                     <button
                       onClick={() => {
                         onClose();
-                        onOpenAIFeedback(gameModule, completionResult);
+                        onOpenAIFeedback(gameModule, completionResult, caretakerFeedback || undefined, currentTaskKey);
                       }}
                       className="w-full sm:flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold uppercase text-xs rounded-xs shadow-md transition-colors cursor-pointer border border-blue-800"
                     >

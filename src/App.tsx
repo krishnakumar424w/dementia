@@ -52,6 +52,8 @@ export default function App() {
   // Completed Game & AI Feedback state
   const [lastCompletedGameModule, setLastCompletedGameModule] = useState<GameModule | null>(null);
   const [lastCompletionResult, setLastCompletionResult] = useState<GameCompletionResult | null>(null);
+  const [lastCaretakerFeedback, setLastCaretakerFeedback] = useState<any>(null);
+  const [lastTaskKey, setLastTaskKey] = useState<string | undefined>(undefined);
 
   // Aria AI Caretaker modal
   const [isAICaretakerOpen, setIsAICaretakerOpen] = useState<boolean>(false);
@@ -213,9 +215,16 @@ export default function App() {
     setPatient(updatedPatient);
   };
 
-  const handleOpenAIFeedback = (gameModule: GameModule, result: GameCompletionResult) => {
+  const handleOpenAIFeedback = (
+    gameModule: GameModule,
+    result: GameCompletionResult,
+    initialFeedback?: any,
+    taskKey?: string
+  ) => {
     setLastCompletedGameModule(gameModule);
     setLastCompletionResult(result);
+    setLastCaretakerFeedback(initialFeedback || null);
+    setLastTaskKey(taskKey);
     setActiveGameId(null);
     // Move to next flowchart node:
     // User Dashboard ──► Specific Game & AI Feedback
@@ -381,6 +390,8 @@ export default function App() {
               metrics: {},
             }}
             patient={patient}
+            initialFeedback={lastCaretakerFeedback}
+            taskKey={lastTaskKey}
             onProceedToMilestones={handleProceedToMilestones}
             onReturnToDashboard={handleReturnToDashboard}
             onReplayGame={() => handleLaunchGame(lastCompletedGameModule.gameId)}

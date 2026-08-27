@@ -65,16 +65,9 @@ export const PatientHomeView: React.FC<PatientHomeViewProps> = ({
                   Good morning, {firstName}
                 </h1>
                 <span className="text-sm text-slate-500 font-mono">({patient.age}y / {patient.diagnosis || patient.dementiaStage || 'MCI'})</span>
-
-                {/* LinkedIn-style highlight badge */}
-                <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-2xs border border-amber-200">
-                  <Flame className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>7-DAY STREAK MASTER • TOP 1%</span>
-                </span>
               </div>
               <p className="text-sm sm:text-base text-slate-600 max-w-2xl leading-relaxed mt-1">
-                Target daily routine initialized. Unbroken <strong className="text-slate-900 font-mono">{streakCount}-day streak</strong> recorded. 
-                Performing in the <strong className="text-blue-700 font-bold">Top 1% of cognitive adherence</strong> across cohort participants.
+                Target daily routine initialized. Unbroken <strong className="text-slate-900 font-mono">{streakCount}-day streak</strong> recorded. Ready for today's cognitive exercises.
               </p>
             </div>
           </div>
@@ -97,27 +90,6 @@ export const PatientHomeView: React.FC<PatientHomeViewProps> = ({
               <span>Voice Chat (Aria)</span>
             </button>
           </div>
-        </div>
-
-        {/* Global/Cohort Benchmark Highlight Banner */}
-        <div className="px-5 py-3 bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-indigo-800/80 text-sm">
-          <div className="flex items-center space-x-2.5">
-            <span className="p-1 rounded-full bg-amber-400 text-slate-950 font-black text-xs px-2.5 py-0.5 flex items-center space-x-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>COMMUNITY BENCHMARK</span>
-            </span>
-            <span className="text-sm text-indigo-100">
-              You are among the <strong className="text-amber-300 font-bold">Top 1% of daily active players</strong> across 1,240+ clinic participants this week.
-            </span>
-          </div>
-
-          <button
-            onClick={() => onSelectSubView('milestones')}
-            className="flex items-center space-x-1.5 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer self-end sm:self-auto shrink-0"
-          >
-            <span>See Percentile Badges</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Dense Patient Telemetry Bar */}
